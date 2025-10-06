@@ -28,8 +28,6 @@ app.get('/', (req, res) => {
 
 // later you will add your paystack endpoints here
 
-const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 // --- Paystack quick checkout redirect endpoint ---
 // GET /pay/checkout?email=<email>&plan=monthly|6month&userId=<userId>

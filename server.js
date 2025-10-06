@@ -97,5 +97,5 @@ app.get('/status-page', (req, res) => {
     </html>
   `);
 });
-  app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+  
 

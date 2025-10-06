@@ -5,6 +5,16 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 const app = express();
+// Safe environment values
+const PORT = process.env.PORT || 3000;
+
+// APP_URL: prefer explicit APP_URL env var, otherwise try Render's RENDER_EXTERNAL_URL
+// and always remove a trailing slash safely.
+const rawAppUrl = process.env.APP_URL || (process.env.RENDER_EXTERNAL_URL ? `https://${process.env.RENDER_EXTERNAL_URL}` : '');
+const APP_URL = rawAppUrl ? rawAppUrl.replace(/\/$/, '') : '';
+
+// You can log this once at startup to confirm
+console.log('APP_URL:', APP_URL);
 
 app.use(cors());
 
@@ -39,7 +49,7 @@ app.get('/pay/checkout', async (req, res) => {
 
     if (!planCode) return res.status(500).send('Server not configured with plan codes');
 
-    const callbackUrl = `${process.env.APP_URL.replace(/\/$/, '')}/paystack/callback?userId=${encodeURIComponent(userId)}`;
+const callbackUrl = `${APP_URL}/paystack/callback?userId=${encodeURIComponent(userId)}`;
 
     // Initialize transaction with Paystack
     const initResp = await axios.post('https://api.paystack.co/transaction/initialize', {
@@ -89,4 +99,5 @@ app.get('/status-page', (req, res) => {
     </html>
   `);
 });
-  
+  app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+

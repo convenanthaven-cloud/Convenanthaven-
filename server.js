@@ -27,6 +27,28 @@ app.get('/', (req, res) => {
 });
 
 // later you will add your paystack endpoints here
+// TEMP TEST endpoint — use this to test Thunkable WebViewer postMessage works
+app.get('/pay/testsuccess', (req, res) => {
+  const userId = req.query.userId || 'user_1';
+  res.send(`
+    <html>
+      <head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+      <body>
+        <h3>Test: posting message to parent</h3>
+        <p>User: ${userId}</p>
+        <script>
+          // send a clear, simple message
+          try {
+            window.parent.postMessage("payment-success", "*");
+          } catch(e) {
+            // ignore
+          }
+        </script>
+        <p>If running in a WebViewer, the app should receive "payment-success".</p>
+      </body>
+    </html>
+  `);
+});
 
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 // --- Paystack quick checkout redirect endpoint ---

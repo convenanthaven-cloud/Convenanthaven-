@@ -97,5 +97,40 @@ app.get('/status-page', (req, res) => {
     </html>
   `);
 });
-  
+ // ✅ Verify payment endpoint
+app.get('/pay/verify', async (req, res) => {
+  try {
+    const ref = req.query.reference;
+    const response = await axios.get(`https://api.paystack.co/transaction/verify/${ref}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
+      }
+    });
+
+    const data = response.data.data;
+    if (data.status === 'success') {
+      // ✅ Payment successful – tell Thunkable WebViewer
+      res.send(`
+        <script>
+          window.parent.postMessage("payment success", "*");
+        </script>
+      `);
+    } else {
+      // ❌ Payment failed
+      res.send(`
+        <script>
+          window.parent.postMessage("payment failed", "*");
+        </script>
+      `);
+    }
+  } catch (error) {
+    // ⚠️ Verification error
+    res.send(`
+      <script>
+        window.parent.postMessage("verification error", "*");
+      </script>
+    `);
+  }
+});
+
 

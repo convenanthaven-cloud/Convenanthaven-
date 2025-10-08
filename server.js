@@ -49,6 +49,39 @@ app.get('/pay/testsuccess', (req, res) => {
     </html>
   `);
 });
+// GET /status-page?userId=<userId>
+// Server renders current subscription status and posts it to the WebViewer parent
+app.get('/status-page', (req, res) => {
+  const userId = req.query.userId || 'unknown';
+  // Pull the current status from your DB or in-memory store
+  const user = users[userId] || {};
+  const status = user.subscription_status || 'free'; // e.g. 'active', 'free', 'past_due'
+  // Send a minimal page that immediately posts message to parent
+  res.send(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+      </head>
+      <body>
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h3>Subscription status: ${status}</h3>
+          <p>User: ${userId}</p>
+        </div>
+        <script>
+          (function(){
+            var msg = "subscription:${status}";
+            try {
+              window.parent.postMessage(msg, "*");
+            } catch(e) {
+              // ignore
+            }
+          })();
+        </script>
+      </body>
+    </html>
+  `);
+});
 
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 // --- Paystack quick checkout redirect endpoint ---

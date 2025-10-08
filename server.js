@@ -82,6 +82,75 @@ app.get('/status-page', (req, res) => {
     </html>
   `);
 });
+// ---------- initialize checkout by amount (works without Paystack plan codes) ----------
+const axios = require('axios'); // ensure axios is required at top of file
+
+app.get('/pay/checkout', async (req, res) => {
+  try {
+    // read query params
+    const email = req.query.email || '';
+    const planParam = (req.query.plan || '').toLowerCase(); // "monthly" or "6month"
+    const userId = req.query.userId || 'user_1';
+
+    if (!email) {
+      return res.status(400).send('Missing email');
+    }
+
+    // Map the textual plan to an amount in Kobo (Naira * 100)
+    // YOUR PRICES: monthly = ₦8,000 ; six-month = ₦45,000
+    const PLAN_AMOUNTS = {
+      monthly: 8000 * 100,   // 800000 Kobo
+      '6month': 45000 * 100  // 4500000 Kobo
+    };
+
+    const amount = PLAN_AMOUNTS[planParam];
+    if (!amount) {
+      return res.status(400).send(`Unknown plan "${planParam}". Use plan=monthly or plan=6month`);
+    }
+
+    // Paystack initialize payload
+    const callbackUrl = `${APP_URL}/pay/verify?userId=${encodeURIComponent(userId)}`;
+
+    const body = {
+      email,
+      amount,            // amount in Kobo
+      callback_url: callbackUrl,
+      // optional metadata for later reference
+      metadata: { userId, plan: planParam }
+    };
+
+    // call Paystack initialize endpoint
+    const resp = await axios.post('https://api.paystack.co/transaction/initialize', body, {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+
+    // Check Paystack response
+    const initData = resp.data;
+    if (!initData || !initData.status) {
+      return res.status(500).send('Paystack initialize failed (no status).');
+    }
+    if (!initData.data || !initData.data.authorization_url) {
+      // include Paystack message if available
+      const message = initData.message || 'No authorization_url returned';
+      return res.status(500).send(`checkout initialization failed: ${message}`);
+    }
+
+    // Redirect user to Paystack hosted payment page
+    const authUrl = initData.data.authorization_url;
+    return res.redirect(authUrl);
+
+  } catch (err) {
+    // log and return clear error so you can see it in Render logs
+    console.error('Checkout init error:', err?.response?.data || err.message || err);
+    // If Paystack returns an error in err.response.data, include it in response
+    const detail = err?.response?.data ? JSON.stringify(err.response.data) : err.message;
+    return res.status(500).send(`checkout initialization failed: ${detail}`);
+  }
+});
 
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 // --- Paystack quick checkout redirect endpoint ---

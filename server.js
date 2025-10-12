@@ -1,4 +1,4 @@
-const express = require('express');
+toconst express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -25,7 +25,7 @@ app.get('/pay/checkout', async (req, res) => {
     return res.status(400).send('Missing email, plan, or userId');
   }
 
-  const amount = plan === 'monthly' ? 2000 * 100 : 10000 * 100;
+  const amount = plan === 'monthly' ? 8000 * 100 : 45000 * 100;
 
   try {
     const response = await axios.post(

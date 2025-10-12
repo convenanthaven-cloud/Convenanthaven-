@@ -17,103 +17,59 @@ app.get('/', (req, res) => {
   res.send('Paystack Thunkable Demo Server Running ✅');
 });
 
-// ✅ Route 2 — Initialize Paystack Checkout
+// Route: Initialize Paystack Checkout (with debug logging)
 app.get('/pay/checkout', async (req, res) => {
-  const { email, plan, userId } = req.query;
-
-  if (!email || !plan || !userId) {
-    return res.status(400).send('Missing email, plan, or userId');
-  }
-
-  const amount = plan === 'monthly' ? 2000 * 100 : 10000 * 100;
-
   try {
-    const response = await axios.post(
-      'https://api.paystack.co/transaction/initialize',
-      {
-        email,
-        amount,
-        metadata: { plan, userId },
-        callback_url: `https://convenanthaven-alw5.onrender.com/pay/verify?userId=${userId}`,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const { email = '', plan = '', userId = 'user_1' } = req.query;
+    const planKey = (plan || '').toLowerCase().replace(/-/g, '');
 
-    const data = response.data;
-    if (data.status) {
-      res.redirect(data.data.authorization_url);
-    } else {
-      res.send('Checkout initialization failed.');
+    if (!email) return res.status(400).send('Missing email');
+
+    // DEBUG: explicit mapping (Kobo)
+    const PLAN_AMOUNTS = {
+      monthly: 8000 * 100,   // 800000 kobo => ₦8,000
+      '6month': 45000 * 100, // 4500000 kobo => ₦45,000
+      sixmonth: 45000 * 100
+    };
+
+    // Force the amount from mapping (defensive)
+    const amount = PLAN_AMOUNTS[planKey];
+
+    // Log what we received and what we will send
+    console.log('checkout:init - incoming', { email, plan, planKey, userId });
+    console.log('checkout:init - amount to send (kobo):', amount);
+
+    if (!amount) {
+      return res.status(400).send(`Unknown plan "${plan}". Use plan=monthly or plan=6month.`);
     }
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.send('Checkout initialization failed.');
-  }
-});
 
-// ✅ Route 3 — Verify Payment
-app.get('/pay/verify', async (req, res) => {
-  const { reference, userId } = req.query;
+    const callbackUrl = `${process.env.APP_URL || 'https://convenanthaven-alw5.onrender.com'}/pay/verify?userId=${encodeURIComponent(userId)}`;
 
-  if (!reference) return res.status(400).send('Missing transaction reference');
+    const body = { email, amount, callback_url: callbackUrl, metadata: { userId, plan: planKey } };
 
-  try {
-    const verifyResponse = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
+    // Log the exact payload
+    console.log('checkout:init - body:', JSON.stringify(body));
+
+    const resp = await axios.post('https://api.paystack.co/transaction/initialize', body, {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
     });
 
-    const data = verifyResponse.data;
-    if (data.status && data.data.status === 'success') {
-      users[userId] = {
-        subscription_status: 'active',
-        subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      };
+    // Log Paystack's response (especially the amount returned)
+    console.log('checkout:init - paystack response status:', resp.data?.status);
+    console.log('checkout:init - paystack resp.data.data.amount (kobo):', resp.data?.data?.amount);
+    console.log('checkout:init - paystack authorization_url:', resp.data?.data?.authorization_url);
 
-      res.send(`
-        <script>
-          window.opener.postMessage('payment_success', '*');
-          window.close();
-        </script>
-      `);
+    if (resp.data && resp.data.status && resp.data.data && resp.data.data.authorization_url) {
+      return res.redirect(resp.data.data.authorization_url);
     } else {
-      res.send('Payment not successful');
+      return res.status(500).send(`checkout initialization failed: ${resp.data?.message || 'no authorization_url'}`);
     }
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.send('Verification failed');
+  } catch (err) {
+    console.error('checkout:init error:', err?.response?.data || err.message || err);
+    return res.status(500).send(`checkout initialization failed: ${err?.response?.data?.message || err.message}`);
   }
-});
-
-// ✅ Route 4 — Subscription Status Page
-app.get('/status-page', (req, res) => {
-  const userId = req.query.userId || '';
-  const u = users[userId] || { subscription_status: 'free' };
-  const status = u.subscription_status || 'free';
-  const expires = u.subscription_expires_at
-    ? `Expires: ${u.subscription_expires_at}`
-    : '';
-
-  res.send(`
-    <html>
-      <head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-      <body style="font-family: Arial, sans-serif; padding: 20px;">
-        <h2>Subscription status</h2>
-        <p><strong>User:</strong> ${userId}</p>
-        <p><strong>Status:</strong> ${status}</p>
-        <p>${expires}</p>
-        <p>If this shows <em>active</em>, return to your app — your dashboard should be available.</p>
-      </body>
-    </html>
-  `);
-});
-
-// ✅ Start the server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
 });
